@@ -19,12 +19,6 @@ def start(message):
     text = f'Я на связи, {message.from_user.first_name}. Жми /track'
     bot.send_message(message.chat.id, text)
 
-#ручка показов
-@bot.message_handler(commands=["show_stats"])
-def show_stats(message):
-    text = 'Какую активность показать?'
-    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_show(message.chat.id))
-
 
 #разметка да-нет с привязкой по имени активности
 def gen_markup(activity_name):
@@ -40,6 +34,24 @@ def gen_markup_yes_input():
     markup = ReplyKeyboardMarkup()
     markup.add(KeyboardButton("Да"))
     markup.add(KeyboardButton("Ввести другое имя"))
+    return markup
+
+
+#разметка да-нет на удаление с привязкой по имени активности
+def gen_markup_delete(activity_name):
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(InlineKeyboardButton("Да", callback_data=f"delete_yes+{activity_name}"))
+    markup.add(InlineKeyboardButton("Нет", callback_data=f"delete_no+{activity_name}"))
+    return markup
+
+
+#разметка да-нет на удаление всех активностей
+def gen_markup_delete_all():
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(InlineKeyboardButton("Да", callback_data="delete_all_yes"))
+    markup.add(InlineKeyboardButton("Нет", callback_data="all_delete_no"))
     return markup
 
 
@@ -65,6 +77,17 @@ def gen_markup_activities_show(user_id):
     return markup
 
 
+#разметка полного списка активностей для удаления
+def gen_markup_activities_delete(user_id):
+    act_list = DB.get_activities_list(user_id)
+    markup = InlineKeyboardMarkup()
+    markup.row_width = len(act_list) + 1
+    for act in sorted(act_list):
+        markup.add(InlineKeyboardButton(act, callback_data=f"delete_act+{act}"))
+    markup.add(InlineKeyboardButton('Все активности', callback_data='delete_all'))
+    return markup
+
+
 #полный набор ответов на инлайн-кнопки
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
@@ -87,35 +110,64 @@ def callback_query(call):
     elif 'show_act' in call.data:
         text = DB.count_track_relation(call.from_user.id, call.data.split('+')[1])
         bot.send_message(call.from_user.id, text)
+    elif "delete_yes" in call.data:
+        activity = call.data.split('+')[1]
+        DB.delete_activity(call.from_user.id, activity)
+        bot.answer_callback_query(call.id, f"Активность {activity} удалена")
+    elif "delete_no" in call.data:
+        text = 'Может пригодиться, хорошо, что передумал'
+        bot.send_message(call.from_user.id, text)
+    elif call.data == "delete_all_yes":
+        DB.delete_all_activities(call.from_user.id)
+        bot.answer_callback_query(call.id, "Все активности удалены")
+    elif call.data == "delete_all":
+        text = f"Точно хочешь удалить отметки по всем своим активностям?"
+        bot.send_message(call.from_user.id, text, reply_markup=gen_markup_delete_all())
+    elif 'delete_act' in call.data:
+        text = f"Точно хочешь удалить отметки по активности '{call.data.split('+')[1]}'?"
+        bot.send_message(call.from_user.id, text, reply_markup=gen_markup_delete(call.data.split('+')[1]))
     else:
         ask_for_activity(call.from_user.id, call.data)
 
 
-#создать новую активность по /add_activity
-@bot.message_handler(commands=["add_activity"])
-def show_stats(message):
-    ask_for_activity_name(message.from_user.id)
-
-
-#удалить активность
-
-
-#функция, собирающая название активности
+# функция, собирающая название активности
 def ask_for_activity_name(user_id):
     text = 'Введи название активности'
     bot.send_message(user_id, text, reply_markup=ReplyKeyboardRemove())
     DB.set_current_status(user_id, 'asking_new_activity_name')
 
 
+# функция, предлагающая трэкнуть активность
 def ask_for_activity(user_id, activity_name):
     text = f'делаль {activity_name}?'
     bot.send_message(user_id, text, reply_markup=gen_markup(activity_name))
 
 
+#ручка создания новой активности
+@bot.message_handler(commands=["add_activity"])
+def add_activity(message):
+    ask_for_activity_name(message.from_user.id)
+
+
+#ручка трэка
 @bot.message_handler(commands=["track"])
 def track(message):
     text = 'Какую активность ты будешь трекать?'
     bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities(message.from_user.id))
+
+
+#ручка показов
+@bot.message_handler(commands=["show"])
+def show_stats(message):
+    text = 'Какую активность показать?'
+    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_show(message.chat.id))
+
+
+#ручка удаления
+@bot.message_handler(commands=["delete"])
+def delete(message):
+    text = 'Выбери активность, которую хочешь удалить'
+    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_delete(message.chat.id))
 
 
 #Основной диалог с треком  (запускается после старта)
@@ -147,6 +199,11 @@ def echo_message(message):
             ask_for_activity_name(message.from_user.id)
         else:
             bot.send_message(message.chat.id, "Жми на кнопку", reply_markup=gen_markup_yes_input())
+    # elif status == "asking_if_deleting_true":
+    #     activity_name =
+    #     DB.set_current_activity(message.from_user.id, activity_name)
+    #     bot.send_message(message.chat.id, text, reply_markup=gen_markup(activity_name))
+
 
 
 if __name__ == '__main__':
