@@ -77,9 +77,10 @@ def get_activities_list(user_id):
     return get_user_data(user_id)['activities'].keys()
 
 
-# def count_track_relation(user_id) -> str:
-#     return f'{sum(get_user_data(user_id).values())}/{len(get_user_data(user_id))}'
-#
-#
+def count_track_relation(user_id, activity_name) -> str:
+    d = get_user_data(user_id)
+    return f'{sum(d["activities"][activity_name].values())}/{len(d["activities"][activity_name])}'
+
+
 # def count_track_abs(user_id) -> str:
 #     return f'{sum(get_user_data(user_id).values())}'

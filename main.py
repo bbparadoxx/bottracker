@@ -20,10 +20,10 @@ def start(message):
     bot.send_message(message.chat.id, text)
 
 #ручка показов
-# @bot.message_handler(commands=["show_stats"])
-# def show_stats(message):
-#     bot.send_message(message.chat.id, DB.count_track_abs(message.from_user.id))
-#     bot.send_message(message.chat.id, DB.count_track_relation(message.from_user.id))
+@bot.message_handler(commands=["show_stats"])
+def show_stats(message):
+    text = 'Какую активность показать?'
+    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_show(message.chat.id))
 
 
 #разметка да-нет с привязкой по имени активности
@@ -47,14 +47,21 @@ def gen_markup_yes_input():
 def gen_markup_activities(user_id):
     act_list = DB.get_activities_list(user_id)
     markup = InlineKeyboardMarkup()
-    print('1111111111')
     markup.row_width = len(act_list) + 1
-    print('222222222222')
     for act in sorted(act_list):
         markup.add(InlineKeyboardButton(act, callback_data=act))
-    print('33333333333')
     markup.add(InlineKeyboardButton('Добавить новую активность', callback_data='new_activity'))
-    print(markup)
+    return markup
+
+
+#разметка полного списка активностей для показа
+def gen_markup_activities_show(user_id):
+    act_list = DB.get_activities_list(user_id)
+    markup = InlineKeyboardMarkup()
+    markup.row_width = len(act_list) + 1
+    markup.add(InlineKeyboardButton('Все активности', callback_data='show_all'))
+    for act in sorted(act_list):
+        markup.add(InlineKeyboardButton(act, callback_data=f"show_act+{act}"))
     return markup
 
 
@@ -70,11 +77,27 @@ def callback_query(call):
     elif call.data == "new_activity":
         DB.set_current_status(call.from_user.id, "asking_new_activity_name")
         ask_for_activity_name(call.from_user.id)
+    elif call.data == "show_all":
+        act_list = DB.get_activities_list(call.from_user.id)
+        text = ''
+        for act in sorted(act_list):
+            text += act + ':' + '\n'
+            text += DB.count_track_relation(call.from_user.id, act) + '\n' * 2
+        bot.send_message(call.from_user.id, text)
+    elif 'show_act' in call.data:
+        text = DB.count_track_relation(call.from_user.id, call.data.split('+')[1])
+        bot.send_message(call.from_user.id, text)
     else:
         ask_for_activity(call.from_user.id, call.data)
 
 
-#создать новую активность по /create_activity
+#создать новую активность по /add_activity
+@bot.message_handler(commands=["add_activity"])
+def show_stats(message):
+    ask_for_activity_name(message.from_user.id)
+
+
+#удалить активность
 
 
 #функция, собирающая название активности
@@ -92,19 +115,15 @@ def ask_for_activity(user_id, activity_name):
 @bot.message_handler(commands=["track"])
 def track(message):
     text = 'Какую активность ты будешь трекать?'
-    print('track 1')
     bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities(message.from_user.id))
 
-    print('track 2')
 
 #Основной диалог с треком  (запускается после старта)
 @bot.message_handler(func=lambda message: True)
 def echo_message(message):
-    print('krya krya')
     status = DB.get_user_status(message.from_user.id)
     if status == "asking_new_activity_name":
         activity_name = message.text
-        print('tryam tryam')
         if DB.check_activity(message.from_user.id, activity_name):
             text = f'Активность {activity_name} уже есть, не могу её создать.\n'
             text += f'Чтобы создать новую активность или отметить активность {activity_name}, жми /track'
