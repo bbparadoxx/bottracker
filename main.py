@@ -1,5 +1,6 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 # import time
 # import multiprocessing
 # import schedule
@@ -19,18 +20,26 @@ def start(message):
     bot.send_message(message.chat.id, text)
 
 #ручка показов
-@bot.message_handler(commands=["show_stats"])
-def show_stats(message):
-    bot.send_message(message.chat.id, DB.count_track_abs(message.from_user.id))
-    bot.send_message(message.chat.id, DB.count_track_relation(message.from_user.id))
+# @bot.message_handler(commands=["show_stats"])
+# def show_stats(message):
+#     bot.send_message(message.chat.id, DB.count_track_abs(message.from_user.id))
+#     bot.send_message(message.chat.id, DB.count_track_relation(message.from_user.id))
 
 
 #разметка да-нет с привязкой по имени активности
 def gen_markup(activity_name):
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
-    markup.add(InlineKeyboardButton("Yes", callback_data=f"cb_yes+{activity_name}"))
-    markup.add(InlineKeyboardButton("No", callback_data=f"cb_no+{activity_name}"))
+    markup.add(InlineKeyboardButton("Да", callback_data=f"cb_yes+{activity_name}"))
+    markup.add(InlineKeyboardButton("Нет", callback_data=f"cb_no+{activity_name}"))
+    return markup
+
+
+#разметка да-ввод другого имени
+def gen_markup_yes_input():
+    markup = ReplyKeyboardMarkup()
+    markup.add(KeyboardButton("Да"))
+    markup.add(KeyboardButton("Ввести другое имя"))
     return markup
 
 
@@ -38,10 +47,14 @@ def gen_markup(activity_name):
 def gen_markup_activities(user_id):
     act_list = DB.get_activities_list(user_id)
     markup = InlineKeyboardMarkup()
-    markup.row_width = len(act_list)
+    print('1111111111')
+    markup.row_width = len(act_list) + 1
+    print('222222222222')
     for act in sorted(act_list):
         markup.add(InlineKeyboardButton(act, callback_data=act))
+    print('33333333333')
     markup.add(InlineKeyboardButton('Добавить новую активность', callback_data='new_activity'))
+    print(markup)
     return markup
 
 
@@ -55,6 +68,7 @@ def callback_query(call):
         DB.track_activity(call.from_user.id, call.data.split('+')[1], 0)
         bot.answer_callback_query(call.id, "Бывает.")
     elif call.data == "new_activity":
+        DB.set_current_status(call.from_user.id, "asking_new_activity_name")
         ask_for_activity_name(call.from_user.id)
     else:
         ask_for_activity(call.from_user.id, call.data)
@@ -66,8 +80,8 @@ def callback_query(call):
 #функция, собирающая название активности
 def ask_for_activity_name(user_id):
     text = 'Введи название активности'
-    bot.send_message(user_id, text)
-    DB.set_current_status('asking_new_activity_name')
+    bot.send_message(user_id, text, reply_markup=ReplyKeyboardRemove())
+    DB.set_current_status(user_id, 'asking_new_activity_name')
 
 
 def ask_for_activity(user_id, activity_name):
@@ -78,40 +92,42 @@ def ask_for_activity(user_id, activity_name):
 @bot.message_handler(commands=["track"])
 def track(message):
     text = 'Какую активность ты будешь трекать?'
+    print('track 1')
     bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities(message.from_user.id))
 
+    print('track 2')
 
 #Основной диалог с треком  (запускается после старта)
 @bot.message_handler(func=lambda message: True)
 def echo_message(message):
-    state = DB.get_user_status(message.from_user.id)
-    if state == "asking_new_activity_name":
+    print('krya krya')
+    status = DB.get_user_status(message.from_user.id)
+    if status == "asking_new_activity_name":
         activity_name = message.text
-        if DB.check_activity(activity_name):
+        print('tryam tryam')
+        if DB.check_activity(message.from_user.id, activity_name):
             text = f'Активность {activity_name} уже есть, не могу её создать.\n'
             text += f'Чтобы создать новую активность или отметить активность {activity_name}, жми /track'
             bot.send_message(message.chat.id, text)
-            DB.set_current_status('')
+            DB.set_current_status(message.from_user.id, '')
         else:
             text = f"Вы хотите создать активность с именем '{activity_name}'?"
-            DB.set_current_status('asking_activity_name_is_true')
-            DB.set_current_activity(activity_name)
-            bot.send_message(message.chat.id, text) # клавиатура "Да" или "Ввести другое имя"
-    elif state == 'asking_activity_name_is_true':
+            DB.set_current_status(message.from_user.id, 'asking_activity_name_is_true')
+            DB.set_current_activity(message.from_user.id, activity_name)
+            bot.send_message(message.chat.id, text, reply_markup=gen_markup_yes_input()) # клавиатура "Да" или "Ввести другое имя"
+    elif status == 'asking_activity_name_is_true':
         if message.text == 'Да':
             # создаём активность и удаляем клавиатуру
-            activity_name = DB.get_user_current_activity()
-            DB.add_activity(activity_name)
-            DB.set_current_status('')
-            DB.set_current_activity('')
+            activity_name = DB.get_user_current_activity(message.from_user.id)
+            DB.add_activity(message.from_user.id, activity_name)
+            DB.set_current_status(message.from_user.id, '')
+            DB.set_current_activity(message.from_user.id, '')
             text = f'Активность {activity_name} добавлена!'
-            bot.send_message(message.chat.id, text)
+            bot.send_message(message.chat.id, text, reply_markup=ReplyKeyboardRemove())
         elif message.text == 'Ввести другое имя':
-            # кидаем на шаг ввода имени
-            pass
+            ask_for_activity_name(message.from_user.id)
         else:
-            pass
-            # говорим жми на кнопку
+            bot.send_message(message.chat.id, "Жми на кнопку", reply_markup=gen_markup_yes_input())
 
 
 if __name__ == '__main__':

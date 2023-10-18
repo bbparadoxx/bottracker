@@ -5,7 +5,7 @@ import datetime
 
 base_user = '''{
   "info": {
-    "state": "",
+    "status": "",
     "activity_name": ""
   },
   "activities" : {
@@ -35,34 +35,38 @@ def get_user_ids() -> map:
 def track_activity(user_id, activity_name, status):
     current_date = str(datetime.date.today())
     path = f'users\\{user_id}.json'
-    get_user_data(user_id)['activities'][activity_name][current_date] = status
-    json.dump(get_user_data(user_id), open(path, 'w'))
+    d = get_user_data(user_id)
+    d['activities'][activity_name][current_date] = status
+    json.dump(d, open(path, 'w'))
 
 
 def add_activity(user_id, activity_name):
-    get_user_data(user_id)['activities'][activity_name] = {}
+    d = get_user_data(user_id)
+    d['activities'][activity_name] = {}
     path = f'users\\{user_id}.json'
-    json.dump(get_user_data(user_id), open(path, 'w'))
+    json.dump(d, open(path, 'w'))
 
 
 def set_current_activity(user_id, activity_name):
-    get_user_data(user_id)['info']['activity_name'] = activity_name
+    d = get_user_data(user_id)
+    d['info']['activity_name'] = activity_name
     path = f'users\\{user_id}.json'
-    json.dump(get_user_data(user_id), open(path, 'w'))
+    json.dump(d, open(path, 'w'))
 
 
 def set_current_status(user_id, status):
-    get_user_data(user_id)['info']['status'] = status
+    d = get_user_data(user_id)
+    d['info']['status'] = status
     path = f'users\\{user_id}.json'
-    json.dump(get_user_data(user_id), open(path, 'w'))
+    json.dump(d, open(path, 'w'))
 
 
 def get_user_status(user_id) -> str:
-    return get_user_data(user_id)['info']['state']
+    return get_user_data(user_id)['info']['status']
 
 
 def get_user_current_activity(user_id) -> str:
-    return get_user_data(user_id)['info']['activity']
+    return get_user_data(user_id)['info']['activity_name']
 
 
 def check_activity(user_id, activity_name) -> bool:
@@ -73,9 +77,9 @@ def get_activities_list(user_id):
     return get_user_data(user_id)['activities'].keys()
 
 
-def count_track_relation(user_id) -> str:
-    return f'{sum(get_user_data(user_id).values())}/{len(get_user_data(user_id))}'
-
-
-def count_track_abs(user_id) -> str:
-    return f'{sum(get_user_data(user_id).values())}'
+# def count_track_relation(user_id) -> str:
+#     return f'{sum(get_user_data(user_id).values())}/{len(get_user_data(user_id))}'
+#
+#
+# def count_track_abs(user_id) -> str:
+#     return f'{sum(get_user_data(user_id).values())}'
