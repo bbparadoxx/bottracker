@@ -102,6 +102,12 @@ def count_track_relation(user_id, activity_name) -> str:
     d = get_user_data(user_id)
     return f'{sum(d["activities"][activity_name].values())}/{len(d["activities"][activity_name])}'
 
+#переименовать активность
+def rename_activity(user_id, new_name, old_name):
+    path = f'users\\{user_id}.json'
+    d = get_user_data(user_id)
+    d["activities"][new_name] = d["activities"].pop(old_name)
+    json.dump(d, open(path, 'w'))
 
 #Невошедшие приколы
 

@@ -3,3 +3,5 @@ users/*.json
 venv
 .idea
 __pycache__
+krya.jpg
+visual.py
