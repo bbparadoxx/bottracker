@@ -43,11 +43,11 @@ def add_activity(user_id, activity_name):
 
 #трекает активность: 0 или 1
 def track_activity(user_id, activity_name, status):
-    json.dump(d, open(path, 'w'))
     current_date = str(datetime.date.today())
-    path = f'users\\{user_id}.json'
     d = get_user_data(user_id)
     d['activities'][activity_name][current_date] = status
+    path = f'users\\{user_id}.json'
+    json.dump(d, open(path, 'w'))
 
 
 #удаляет 1 активность

@@ -143,9 +143,15 @@ def show_calendar(call, activity_name):
     )
 
 
+#убрать разметкк
+def delete_markup(call):
+    bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id)
+
+
 #полный набор ответов на инлайн-кнопки
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
+    delete_markup(call)
     if "cb_yes" in call.data:
         DB.track_activity(call.from_user.id, call.data.split('+')[1], 1)
         bot.answer_callback_query(call.id, "Молодец!")
@@ -174,7 +180,7 @@ def callback_query(call):
                 text = f"Отметка активности {activity_name} за {date.strftime('%d.%m.%Y')}: {score}.\n'"
                 text += "Хотите изменить?"
                 bot.send_message(call.from_user.id, text,
-                                reply_markup=gen_markup_change_track_date(activity_name, date_change))
+                                 reply_markup=gen_markup_change_track_date(activity_name, date_change))
             else:
                 bot.send_message(
                     chat_id=call.from_user.id,
@@ -372,3 +378,4 @@ if __name__ == '__main__':
 #     while True:
 #         schedule.run_pending()
 #         time.sleep(1)
+
