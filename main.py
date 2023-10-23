@@ -1,7 +1,8 @@
 import telebot
+import datetime
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-from telebot_calendar import Calendar, ENGLISH_LANGUAGE
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,  CallbackQuery
+from telebot_calendar import Calendar, CallbackData, ENGLISH_LANGUAGE
 
 
 # import time
@@ -43,6 +44,17 @@ def gen_markup_yes_input():
     return markup
 
 
+#разметка да-нет на изменение конкретного трека
+def gen_markup_change_track_date(activity_name, date):
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    text1 = f"change_date_track_yes+{activity_name}+{date}"
+    text2 = f"change_date_track_no+{activity_name}+{date}"
+    markup.add(InlineKeyboardButton("Да", callback_data=text1))
+    markup.add(InlineKeyboardButton("Нет", callback_data=text2))
+    return markup
+
+
 #разметка да-нет на удаление с привязкой по имени активности
 def gen_markup_delete(activity_name):
     markup = InlineKeyboardMarkup()
@@ -68,6 +80,7 @@ def gen_markup_change(activity_name):
     markup.add(InlineKeyboardButton("Изменить или отменить отметку", callback_data=f"change_track+{activity_name}"))
     markup.add(InlineKeyboardButton("Переименовать активность", callback_data=f"change_name+{activity_name}"))
     return markup
+
 
 #разметка полного списка активностей + предложение добавить активность
 def gen_markup_activities(user_id):
@@ -112,6 +125,24 @@ def gen_markup_activities_delete(user_id):
     return markup
 
 
+calendar = Calendar(language=ENGLISH_LANGUAGE)
+calendar_track_change = CallbackData("calendar_track_change", "action", "year", "month", "day", "activity_name")
+
+
+#разметка календаря
+def show_calendar(call, activity_name):
+    now = datetime.datetime.now()
+    bot.send_message(
+        call.from_user.id,
+        f"Selected date for {activity_name}",
+        reply_markup=calendar.create_calendar(
+            name=calendar_track_change.prefix + "+" + activity_name,
+            year=now.year,
+            month=now.month,
+        ),
+    )
+
+
 #полный набор ответов на инлайн-кнопки
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
@@ -129,8 +160,39 @@ def callback_query(call):
     elif 'change_name' in call.data:
         ask_for_activity_rename(call.from_user.id, call.data.split('+')[1])
     elif 'change_track' in call.data:
-        text = 'Здесь пока ничего нет, но скоро будет:)'
-        bot.send_message(call.from_user.id, text)
+        show_calendar(call, call.data.split('+')[1])
+    elif call.data.startswith(calendar_track_change.prefix):
+        name, action, year, month, day = call.data.split(calendar_track_change.sep)
+        activity_name = name.split('+')[1]
+        date = calendar.calendar_query_handler(
+            bot=bot, call=call, name=name, action=action, year=year, month=month, day=day
+        )
+        if action == "DAY":
+            date_change = date.strftime('%Y-%m-%d')
+            if date <= datetime.datetime.today():
+                score = DB.show_track(call.from_user.id, activity_name, date_change)
+                text = f"Отметка активности {activity_name} за {date.strftime('%d.%m.%Y')}: {score}.\n'"
+                text += "Хотите изменить?"
+                bot.send_message(call.from_user.id, text,
+                                reply_markup=gen_markup_change_track_date(activity_name, date_change))
+            else:
+                bot.send_message(
+                    chat_id=call.from_user.id,
+                    text='Подожди, завтра еще не наступило. Будущее неизвестно.',
+                    reply_markup=ReplyKeyboardRemove(),
+                )
+        elif action == "CANCEL":
+            bot.send_message(
+                chat_id=call.from_user.id,
+                text='Отмена действия',
+                reply_markup=ReplyKeyboardRemove(),
+            )
+    elif 'change_date_track_yes' in call.data:
+        activity_name = call.data.split('+')[1]
+        date = call.data.split('+')[2]
+        ask_for_change_activity_date_track(call.from_user.id, activity_name, date)
+    elif 'change_date_track_no' in call.data:
+        bot.answer_callback_query(call.id, "Бывает.")
     elif call.data == "show_all":
         act_list = DB.get_activities_list(call.from_user.id)
         text = ''
@@ -174,6 +236,16 @@ def ask_for_activity_rename(user_id, activity_name):
     bot.send_message(user_id, text, reply_markup=ReplyKeyboardRemove())
     DB.set_current_status(user_id, 'asking_activity_rename')
     DB.set_current_activity(user_id, activity_name)
+
+
+# функция, собирающая название активности и дату для изменения трэка
+def ask_for_change_activity_date_track(user_id, activity_name, date):
+    text = f'Введи новую отметку активности {activity_name} за {date}'
+    bot.send_message(user_id, text, reply_markup=ReplyKeyboardRemove())
+    DB.set_current_status(user_id, 'asking_change_activity_date_track')
+    DB.set_current_activity(user_id, activity_name)
+    DB.set_current_date_for_change(user_id, date)
+
 
 # функция, предлагающая трэкнуть активность
 def ask_for_activity(user_id, activity_name):
@@ -247,8 +319,8 @@ def echo_message(message):
     elif status == "asking_activity_rename":
         new_name = message.text
         if DB.check_activity(message.from_user.id, new_name):
-            text = f'Активность {new_name} уже есть, не могу её создать.\n'
-            text += 'Чтобы поменять имя актвности, жми /change'
+            text = f'Активность {new_name} уже есть, нельзя использовать это имя.\n'
+            text += 'Чтобы поменять имя активности, жми /change'
             bot.send_message(message.chat.id, text)
             DB.set_current_status(message.from_user.id, '')
         else:
@@ -256,13 +328,24 @@ def echo_message(message):
             DB.rename_activity(message.from_user.id, new_name, old_name)
             DB.set_current_status(message.from_user.id, '')
             DB.set_current_activity(message.from_user.id, '')
-            text = f'Активность {old_name} переименова в {new_name}!'
+            text = f'Активность {old_name} переименована в {new_name}!'
             bot.send_message(message.chat.id, text)
+    elif status == "asking_change_activity_date_track":
+        new_score = int(message.text)
+        activity_name = DB.get_user_current_activity(message.from_user.id)
+        date = DB.get_user_date_for_change(message.from_user.id)
+        DB.change_track(new_score, message.from_user.id, activity_name, date)
+        DB.set_current_status(message.from_user.id, '')
+        DB.set_current_activity(message.from_user.id, '')
+        DB.set_current_date_for_change(message.from_user.id, '')
+        text = f'Отметка активности {activity_name} за {date} теперь {new_score}.'
+        bot.send_message(message.chat.id, text)
 
 
 
-# calendar = Calendar(language=ENGLISH_LANGUAGE)
-# calendar_1_callback = CallbackData("calendar_1", "action", "year", "month", "day")
+
+
+
 
 if __name__ == '__main__':
     print('Бот успешно запустился!')
