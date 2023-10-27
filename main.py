@@ -11,6 +11,7 @@ from telebot_calendar import Calendar, CallbackData, ENGLISH_LANGUAGE
 
 import DB
 import settings
+import visual
 # import texts
 
 
@@ -129,23 +130,33 @@ calendar = Calendar(language=ENGLISH_LANGUAGE)
 calendar_track_change = CallbackData("calendar_track_change", "action", "year", "month", "day", "activity_name")
 
 
-#разметка календаря
+#разметка календаря с активностью
 def show_calendar(call, activity_name):
     now = datetime.datetime.now()
     bot.send_message(
         call.from_user.id,
         f"Selected date for {activity_name}",
         reply_markup=calendar.create_calendar(
-            name=calendar_track_change.prefix + "+" + activity_name,
+            name=f'{calendar_track_change.prefix}+{activity_name}',
             year=now.year,
             month=now.month,
         ),
     )
 
+#разметка на выбор периода для всех активностей
+def gen_markup_show_all_period():
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 3
+    markup.add(InlineKeyboardButton("Неделя", callback_data="show_week_all"))
+    markup.add(InlineKeyboardButton("Месяц", callback_data="show_month_all"))
+    markup.add(InlineKeyboardButton("Выбрать даты", callback_data="show_custom_all"))
+    return markup
 
-#убрать разметкк
+
+
+#убрать разметку
 def delete_markup(call):
-    bot.edit_message_reply_markup(chat_id=call.message.chat.id, message_id=call.message.message_id)
+    bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id )
 
 
 #полный набор ответов на инлайн-кнопки
@@ -200,11 +211,31 @@ def callback_query(call):
     elif 'change_date_track_no' in call.data:
         bot.answer_callback_query(call.id, "Бывает.")
     elif call.data == "show_all":
-        act_list = DB.get_activities_list(call.from_user.id)
-        text = ''
-        for act in sorted(act_list):
-            text += act + ':' + '\n'
-            text += DB.count_track_relation(call.from_user.id, act) + '\n' * 2
+        text = "За какой период показать данные?"
+        bot.send_message(call.from_user.id, text, reply_markup=gen_markup_show_all_period())
+    elif call.data == "show_week_all":
+        week = datetime.datetime.today().isocalendar()[1]
+        year = datetime.datetime.today().isocalendar()[0]
+        start_date = datetime.datetime.fromisocalendar(year, week, 1)
+        end_date = datetime.datetime.fromisocalendar(year, week, 7)
+        pic = visual.create_activities_img(*DB.collect_all_data_toshow(call.from_user.id, start_date, end_date))
+        bot.send_photo(call.from_user.id, open(f'{pic}', 'rb'))
+    elif call.data == "show_month_all":
+        year = datetime.date.today().strftime('%Y-%m-%d').split('-')[0]
+        month = datetime.date.today().strftime('%Y-%m-%d').split('-')[1]
+        if int(month) in (1, 3, 5, 7, 8, 10, 12):
+            end_date = datetime.datetime.strptime(f'{year}-{month}-31', '%Y-%m-%d')
+        elif int(month) in (4, 6, 9, 11):
+            end_date = datetime.datetime.strptime(f'{year}-{month}-30', '%Y-%m-%d')
+        elif int(year) % 4 == 0:
+            end_date = datetime.datetime.strptime(f'{year}-{month}-29', '%Y-%m-%d')
+        else:
+            end_date = datetime.datetime.strptime(f'{year}-{month}-28', '%Y-%m-%d')
+        start_date = datetime.datetime.strptime(f'{year}-{month}-1', '%Y-%m-%d')
+        pic = visual.create_activities_img(*DB.collect_all_data_toshow(call.from_user.id, start_date, end_date))
+        bot.send_photo(call.from_user.id, open(f'{pic}', 'rb'))
+    elif call.data == "show_custom_all":
+        text = "Здесь скоро что-то будет:)"
         bot.send_message(call.from_user.id, text)
     elif 'show_act' in call.data:
         text = DB.count_track_relation(call.from_user.id, call.data.split('+')[1])
@@ -276,21 +307,21 @@ def track(message):
 @bot.message_handler(commands=["show"])
 def show_stats(message):
     text = 'Какую активность показать?'
-    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_show(message.chat.id))
+    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_show(message.from_user.id))
 
 
 #ручка изменений
 @bot.message_handler(commands=["change"])
-def show_stats(message):
+def change_stats(message):
     text = 'Какую активность хотите изменить?'
-    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_change(message.chat.id))
+    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_change(message.from_user.id))
 
 
 #ручка удаления
 @bot.message_handler(commands=["delete"])
 def delete(message):
     text = 'Выбери активность, которую хочешь удалить'
-    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_delete(message.chat.id))
+    bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_delete(message.from_user.id))
 
 
 #Основной диалог с треком  (запускается после старта)
@@ -346,11 +377,6 @@ def echo_message(message):
         DB.set_current_date_for_change(message.from_user.id, '')
         text = f'Отметка активности {activity_name} за {date} теперь {new_score}.'
         bot.send_message(message.chat.id, text)
-
-
-
-
-
 
 
 if __name__ == '__main__':
