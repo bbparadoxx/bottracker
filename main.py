@@ -99,9 +99,9 @@ def gen_markup_activities_show(user_id):
     act_list = DB.get_activities_list(user_id)
     markup = InlineKeyboardMarkup()
     markup.row_width = len(act_list) + 1
-    markup.add(InlineKeyboardButton('Все активности', callback_data='show_all'))
     for act in sorted(act_list):
         markup.add(InlineKeyboardButton(act, callback_data=f"show_act+{act}"))
+    markup.add(InlineKeyboardButton('Все активности', callback_data='show_all'))
     return markup
 
 
@@ -166,6 +166,7 @@ def callback_query(call):
     if "cb_yes" in call.data:
         DB.track_activity(call.from_user.id, call.data.split('+')[1], 1)
         bot.answer_callback_query(call.id, "Молодец!")
+        show_this_week(call.from_user.id)
     elif "cb_no" in call.data:
         DB.track_activity(call.from_user.id, call.data.split('+')[1], 0)
         bot.answer_callback_query(call.id, "Бывает.")
@@ -214,26 +215,9 @@ def callback_query(call):
         text = "За какой период показать данные?"
         bot.send_message(call.from_user.id, text, reply_markup=gen_markup_show_all_period())
     elif call.data == "show_week_all":
-        week = datetime.datetime.today().isocalendar()[1]
-        year = datetime.datetime.today().isocalendar()[0]
-        start_date = datetime.datetime.fromisocalendar(year, week, 1)
-        end_date = datetime.datetime.fromisocalendar(year, week, 7)
-        pic = visual.create_activities_img(*DB.collect_all_data_toshow(call.from_user.id, start_date, end_date))
-        bot.send_photo(call.from_user.id, open(f'{pic}', 'rb'))
+        show_this_week(call.from_user.id)
     elif call.data == "show_month_all":
-        year = datetime.date.today().strftime('%Y-%m-%d').split('-')[0]
-        month = datetime.date.today().strftime('%Y-%m-%d').split('-')[1]
-        if int(month) in (1, 3, 5, 7, 8, 10, 12):
-            end_date = datetime.datetime.strptime(f'{year}-{month}-31', '%Y-%m-%d')
-        elif int(month) in (4, 6, 9, 11):
-            end_date = datetime.datetime.strptime(f'{year}-{month}-30', '%Y-%m-%d')
-        elif int(year) % 4 == 0:
-            end_date = datetime.datetime.strptime(f'{year}-{month}-29', '%Y-%m-%d')
-        else:
-            end_date = datetime.datetime.strptime(f'{year}-{month}-28', '%Y-%m-%d')
-        start_date = datetime.datetime.strptime(f'{year}-{month}-1', '%Y-%m-%d')
-        pic = visual.create_activities_img(*DB.collect_all_data_toshow(call.from_user.id, start_date, end_date))
-        bot.send_photo(call.from_user.id, open(f'{pic}', 'rb'))
+        show_this_month(call.from_user.id)
     elif call.data == "show_custom_all":
         text = "Здесь скоро что-то будет:)"
         bot.send_message(call.from_user.id, text)
@@ -286,8 +270,35 @@ def ask_for_change_activity_date_track(user_id, activity_name, date):
 
 # функция, предлагающая трэкнуть активность
 def ask_for_activity(user_id, activity_name):
-    text = f'делаль {activity_name}?'
+    text = f'Выполнил {activity_name}?'
     bot.send_message(user_id, text, reply_markup=gen_markup(activity_name))
+
+
+# функция, предлагающая трэкнуть активность
+def show_this_week(user_id):
+    week = datetime.datetime.today().isocalendar()[1]
+    year = datetime.datetime.today().isocalendar()[0]
+    start_date = datetime.datetime.fromisocalendar(year, week, 1)
+    end_date = datetime.datetime.fromisocalendar(year, week, 7)
+    pic = visual.create_activities_img(*DB.collect_all_data_toshow(user_id, start_date, end_date))
+    bot.send_photo(user_id, open(f'{pic}', 'rb'))
+
+
+# функция, предлагающая трэкнуть активность
+def show_this_month(user_id):
+        year = datetime.date.today().strftime('%Y-%m-%d').split('-')[0]
+        month = datetime.date.today().strftime('%Y-%m-%d').split('-')[1]
+        if int(month) in (1, 3, 5, 7, 8, 10, 12):
+            end_date = datetime.datetime.strptime(f'{year}-{month}-31', '%Y-%m-%d')
+        elif int(month) in (4, 6, 9, 11):
+            end_date = datetime.datetime.strptime(f'{year}-{month}-30', '%Y-%m-%d')
+        elif int(year) % 4 == 0:
+            end_date = datetime.datetime.strptime(f'{year}-{month}-29', '%Y-%m-%d')
+        else:
+            end_date = datetime.datetime.strptime(f'{year}-{month}-28', '%Y-%m-%d')
+        start_date = datetime.datetime.strptime(f'{year}-{month}-1', '%Y-%m-%d')
+        pic = visual.create_activities_img(*DB.collect_all_data_toshow(user_id, start_date, end_date))
+        bot.send_photo(user_id, open(f'{pic}', 'rb'))
 
 
 #ручка создания новой активности
@@ -306,6 +317,13 @@ def track(message):
 #ручка показов
 @bot.message_handler(commands=["show"])
 def show_stats(message):
+    text = "За какой период показать данные?"
+    bot.send_message(message.chat.id, text, reply_markup=gen_markup_show_all_period())
+
+
+#ручка показов
+@bot.message_handler(commands=["show_unique"])
+def show_stats_unique(message):
     text = 'Какую активность показать?'
     bot.send_message(message.chat.id, text, reply_markup=gen_markup_activities_show(message.from_user.id))
 
