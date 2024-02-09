@@ -3,19 +3,16 @@ import datetime
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove,  CallbackQuery
 from telebot_calendar import Calendar, CallbackData, ENGLISH_LANGUAGE
-
-
-# import time
-# import multiprocessing
-# import schedule
-
 import DB
 import settings
 import visual
 # import texts
+# import time
+# import multiprocessing
+# import schedule
 
-
-bot = telebot.TeleBot(settings.TG_API_KEY)
+# bot = telebot.TeleBot(settings.TG_API_KEY)
+bot = telebot.TeleBot(settings.TG_API_KEY_beta)
 
 # calendar = Calendar(language=ENGLISH_LANGUAGE)
 # calendar_1_callback = CallbackData("calendar_1", "action", "year", "month", "day")
@@ -23,9 +20,20 @@ bot = telebot.TeleBot(settings.TG_API_KEY)
 #ручка, создающая файл под пользователя
 @bot.message_handler(commands=["start"])
 def start(message):
-    DB.create_user(message.from_user.id)
-    text = f'Я на связи, {message.from_user.first_name}. Жми /track'
+    user_data = [name: message.from_user.first_name,
+                       None,
+                       'x',
+                       message.from_user.id]
+    text = f'Привет, {message.from_user.first_name}!'
+    # text += "Пожалуйста, укажи, который у тебя час. Формат: 09:13."
     bot.send_message(message.chat.id, text)
+    # bot.register_next_step_handler(message, user_data.append(message))
+    # # ИМЭЙЛ
+    # # ПАРОЛЬ
+    DB.create_user(user_data)
+    text = f'Спасибо! Всё готово к работе:). Жми /track'
+    bot.send_message(message.chat.id, text)
+
 
 
 #разметка да-нет с привязкой по имени активности
@@ -156,13 +164,13 @@ def gen_markup_show_all_period():
 
 #убрать разметку
 def delete_markup(call):
-    bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id )
+    bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id)
 
 
 #полный набор ответов на инлайн-кнопки
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
-    delete_markup(call)
+    # delete_markup(call)
     if "cb_yes" in call.data:
         DB.track_activity(call.from_user.id, call.data.split('+')[1], 1)
         bot.answer_callback_query(call.id, "Молодец!")
