@@ -14,10 +14,19 @@ def is_user_in_db(telegram_id: int) -> bool:
     return bool(records)
 
 
+def get_user_id(telegram_id: int) -> int:
+    cursor = db_connection.cursor()
+    select = f"SELECT id FROM users WHERE telegram_id = {telegram_id}"
+    cursor.execute(select)
+    records = cursor.fetchall()
+    cursor.close()
+    return int(records[0][0])
+
+
 #создаёт файл пользователя
 def create_user(user_data: dict) -> int:
     insert = (
-        "INSERT INTO users (telegram_id) "
+        "INSERT INTO users (telegram_id, UTC) "
         "VALUES (%s, %s) "
         "RETURNING id "
     )
@@ -45,15 +54,19 @@ def is_checklist_in_db(user_id, checklist_name) -> bool:
 
 
 #создает чеклист!
-def create_checklist(user_id, checklist_name):
+def create_checklist(user_id, checklist_name) -> int:
     cursor = db_connection.cursor()
     insert = (
             "INSERT INTO checklists (owner, name, is_main) "
             "VALUES (%s, %s, %s) "
+            "RETURNING id "
         )
     cursor.execute(insert, (user_id, checklist_name, bool(checklist_name == "Main checklist")))
+    activity_id = cursor.fetchone()[0]
     db_connection.commit()
     cursor.close()
+    return activity_id
+
 
 # До сих пор работает (поставили с Серёжей
 # добавляет активность!
@@ -133,6 +146,18 @@ def is_activity_in_db(user_id, activity_name) -> bool:
     return bool(records)
 
 
+def is_activity_in_checklist(activity_id, checklist_id) -> bool:
+    cursor = db_connection.cursor()
+    select = (
+        f"SELECT * FROM activities_checklists "
+        f"WHERE checklist_id = {checklist_id} and act_id = '{activity_id}'"
+    )
+    cursor.execute(select)
+    records = cursor.fetchall()
+    cursor.close()
+    return bool(records)
+
+
 #проверка типа активности на 1/0!
 def is_activity_bool(activity_id):
     cursor = db_connection.cursor()
@@ -170,13 +195,14 @@ def update_reverse_track(activity_id, date):
 #отдаёт список активностей пользователя!
 def get_activities(user_id) -> list:
     cursor = db_connection.cursor()
-    select = f"SELECT name FROM activities WHERE owner = {user_id} "
+    select = f"SELECT * FROM activities WHERE owner = {user_id} "
     cursor.execute(select)
     lt = cursor.fetchall()
-    names = [item for t in lt for item in t]
+    # print(lt)
+    # names = [item for t in lt for item in t]
     cursor.close()
-    return names
-
+    # return names
+    return lt
 
 #отдаёт id активности по имени!
 def get_activity_id(user_id, activity_name) -> int:
