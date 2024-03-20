@@ -23,6 +23,13 @@ def start(message):
         bot.send_message(message.chat.id, text, reply_markup=markups.gen_utc_markup())
 
 
+@bot.message_handler(commands=["create_activity"])
+def create_activity(message):
+    text = 'Введи имя активности'
+    msg = bot.send_message(message.chat.id, text)
+    bot.register_next_step_handler(msg, process_enter_activity_name_step)
+
+
 @bot.message_handler(commands=["create_checklist"])
 def create_checklist(message):
     user_id = DB.get_user_id(message.from_user.id)
@@ -41,15 +48,47 @@ def callback_query(call):
         bot.send_message(call.from_user.id, f'Вы выбрали: {call.data}')
         h, m = map(int, call.data.replace('UTC', '').split(':'))
         minutes = h * 60 + (m if h > 0 else -m)
-        user = DB.create_user({'telegram_id': call.from_user.id, 'UTC': minutes})
+        DB.create_user({'telegram_id': call.from_user.id, 'UTC': minutes})
         bot.send_message(call.from_user.id, f'Учётная запись создана. Жми /checklists')
     elif call.data.startswith('choose_checklist_'):
         checklist_name = call.data[len('choose_checklist_'):]
         txt = f'Чеклист {checklist_name} выбран!'
-        msg = bot.send_message(call.from_user.id, txt)
+        bot.send_message(call.from_user.id, txt)
         user_id = DB.get_user_id(call.from_user.id)
         checklist_id = DB.get_checklist_id(user_id, checklist_name)
         set_activities_to_checklist(call.from_user.id, checklist_id)
+    elif call.data.startswith('measure_bool_'):
+        user_id = DB.get_user_id(call.from_user.id)
+        activity_name = call.data[len('measure_bool_'):]
+        DB.create_activity(user_id, activity_name, True, '-')
+        tel_id = call.from_user.id
+        act_id = DB.get_activity_id(user_id, activity_name)
+        check_other_checklists(user_id, tel_id, act_id)
+    elif call.data.startswith('measure_physics_'):
+        text = 'В чём будешь измерять активность? Например, км, шаги, литры.'
+        msg = bot.send_message(call.from_user.id, text)
+        activity_name = call.data[len('measure_physics_'):]
+        tel_id = call.from_user.id
+        bot.register_next_step_handler(msg, process_measurement, activity_name, tel_id)
+    elif call.data.startswith('activity_to_checklists_'):
+        act_id = int(call.data.split('_')[3])
+        check_id = int(call.data.split('_')[4])
+        DB.set_activity_to_checklist(act_id, check_id)
+        tel_id = call.from_user.id
+        user_id = DB.get_user_id(call.from_user.id)
+        txt = 'Хочешь добавить активность в какой-нибудь чеклист? Выбери все!'
+        cur_markup = markups.gen_other_checklists_markup(user_id, act_id)
+        bot.send_message(tel_id, txt, reply_markup=cur_markup)
+    elif call.data.startswith('activities_to_checklist_'):
+        act_id = int(call.data.split('_')[3])
+        check_id = int(call.data.split('_')[4])
+        DB.set_activity_to_checklist(act_id, check_id)
+        tel_id = call.from_user.id
+        user_id = DB.get_user_id(call.from_user.id)
+
+    elif call.data == 'accept_activities':
+        txt = f'Активность успешно добавлена в чеклисты!'
+        bot.send_message(call.from_user.id, txt)
 
 
 def process_enter_checklist_name_step(message):
@@ -62,8 +101,28 @@ def process_enter_checklist_name_step(message):
     else:
         checklist_id = DB.create_checklist(user_id, checklist_name)
         txt = f'Чеклист {checklist_name} создан успешно!'
-        msg = bot.send_message(message.from_user.id, txt)
+        bot.send_message(message.from_user.id, txt)
         set_activities_to_checklist(message.from_user.id, checklist_id)
+
+
+def process_measurement(message, activity_name, tel_id):
+    measurement = message.text.strip()
+    user_id = DB.get_user_id(message.from_user.id)
+    DB.create_activity(user_id, activity_name, False, measurement)
+    act_id = DB.get_activity_id(user_id, activity_name)
+    check_other_checklists(user_id, tel_id, act_id)
+
+
+def check_other_checklists(user_id, tel_id, act_id):
+    lst = DB.get_checklists_except_main(user_id)
+    if lst:
+        txt = 'Хочешь добавить активность в какой-нибудь чеклист? Выбери все!'
+        cur_markup = markups.gen_other_checklists_markup(user_id, act_id)
+        bot.send_message(tel_id, txt, reply_markup=cur_markup)
+    else:
+        txt = 'Активность успешно добавлена!'
+        bot.send_message(tel_id, txt)
+
 
 
 def set_activities_to_checklist(tg_id, checklist_id):
@@ -74,6 +133,19 @@ def set_activities_to_checklist(tg_id, checklist_id):
         'Создать новые можно будет позже.'
     )
     msg = bot.send_message(tg_id, txt, reply_markup=cur_markup)
+
+
+def process_enter_activity_name_step(message):
+    activity_name = message.text.strip()
+    user_id = DB.get_user_id(message.from_user.id)
+    if DB.is_activity_in_db(user_id, activity_name):
+        txt = f'Активность {activity_name} уже есть. Введи другое имя.'
+        msg = bot.send_message(message.from_user.id, txt)
+        bot.register_next_step_handler(msg, process_enter_activity_name_step)
+    else:
+        text = f"Как измеряется активность '{activity_name}':сделано/не сделано или физическая величина (км)?"
+        cur_markup = markups.gen_activity_measure_markup(activity_name)
+        bot.send_message(message.chat.id, text, reply_markup=cur_markup)
 
 
 def delete_markup(call):

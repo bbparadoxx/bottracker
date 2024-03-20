@@ -54,18 +54,19 @@ def is_checklist_in_db(user_id, checklist_name) -> bool:
 
 
 #создает чеклист!
-def create_checklist(user_id, checklist_name) -> int:
-    cursor = db_connection.cursor()
-    insert = (
-            "INSERT INTO checklists (owner, name, is_main) "
-            "VALUES (%s, %s, %s) "
-            "RETURNING id "
-        )
-    cursor.execute(insert, (user_id, checklist_name, bool(checklist_name == "Main checklist")))
-    activity_id = cursor.fetchone()[0]
-    db_connection.commit()
-    cursor.close()
-    return activity_id
+def create_checklist(user_id, checklist_name):
+    if not is_checklist_in_db(user_id, checklist_name):
+        cursor = db_connection.cursor()
+        insert = (
+                "INSERT INTO checklists (owner, name, is_main) "
+                "VALUES (%s, %s, %s) "
+                "RETURNING id "
+            )
+        cursor.execute(insert, (user_id, checklist_name, bool(checklist_name == "Main checklist")))
+        checklist_id = cursor.fetchone()[0]
+        db_connection.commit()
+        cursor.close()
+        return checklist_id
 
 
 # До сих пор работает (поставили с Серёжей
@@ -224,6 +225,16 @@ def get_checklist_id(user_id, checklist_name) -> int:
     return checklist_id
 
 
+#отдаёт имя чеклиста
+def get_checklist_name(checklist_id):
+    cursor = db_connection.cursor()
+    select = f"SELECT name FROM checklists WHERE id = {checklist_id}"
+    cursor.execute(select)
+    checklist_name = cursor.fetchone()[0]
+    cursor.close()
+    return checklist_name
+
+
 #создает трэк!
 def create_track(act_id, value, date):
     cursor = db_connection.cursor()
@@ -276,6 +287,20 @@ def get_checklists(user_id):
     return names
 
 
+#отдает чеклисты пользователя, кроме основного
+def get_checklists_except_main(user_id):
+    cursor = db_connection.cursor()
+    main_id = get_main_checklist_id(user_id)
+    select = (
+        "SELECT name, id FROM checklists "
+        f"WHERE owner = {user_id} and id <> {main_id}"
+    )
+    cursor.execute(select)
+    names_ids = cursor.fetchall()
+    cursor.close()
+    return names_ids
+
+
 #отдаёт все чеклисты с активностью!
 def get_checklists_with_activity(activity_id):
     cursor = db_connection.cursor()
@@ -292,14 +317,19 @@ def get_checklists_with_activity(activity_id):
 
 #удалить чеклист!
 def delete_checklist(checklist_id):
-    cursor = db_connection.cursor()
-    delete = (
-        "DELETE FROM checklists "
-        f"WHERE id = {checklist_id}"
-    )
-    cursor.execute(delete)
-    db_connection.commit()
-    cursor.close()
+    if get_checklist_name(checklist_id) != "Main checklist":
+        cursor = db_connection.cursor()
+        delete = (
+            "DELETE FROM checklists "
+            f"WHERE id = {checklist_id}"
+        )
+        cursor.execute(delete)
+        db_connection.commit()
+        cursor.close()
+        txt = 'Чеклист удален'
+    else:
+        txt = 'Основной чеклист нельзя удалить'
+    return txt
 
 
 #удалить активность!
@@ -478,4 +508,4 @@ db_connection = psycopg2.connect(**db_settings)
 
 
 
-
+create_main_checklist(20)
