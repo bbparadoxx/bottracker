@@ -137,6 +137,13 @@ def set_activity_to_checklist(act_id: int, checklist_id: int):
     cursor.close()
 
 
+def change_act_checklist_connection(act_id: int, checklist_id: int):
+    if is_activity_in_checklist(act_id, checklist_id):
+        delete_activity_from_checklist(act_id, checklist_id)
+    else:
+        set_activity_to_checklist(act_id, checklist_id)
+
+
 #проверяет, есть ли активность!
 def is_activity_in_db(user_id, activity_name) -> bool:
     cursor = db_connection.cursor()
@@ -226,13 +233,13 @@ def get_checklist_id(user_id, checklist_name) -> int:
 
 
 #отдаёт имя чеклиста
-def get_checklist_name(checklist_id):
+def is_checklist_main(checklist_id):
     cursor = db_connection.cursor()
-    select = f"SELECT name FROM checklists WHERE id = {checklist_id}"
+    select = f"SELECT is_main FROM checklists WHERE id = {checklist_id}"
     cursor.execute(select)
-    checklist_name = cursor.fetchone()[0]
+    checklist_is_main = cursor.fetchone()[0]
     cursor.close()
-    return checklist_name
+    return checklist_is_main
 
 
 #создает трэк!
@@ -317,7 +324,7 @@ def get_checklists_with_activity(activity_id):
 
 #удалить чеклист!
 def delete_checklist(checklist_id):
-    if get_checklist_name(checklist_id) != "Main checklist":
+    if not is_checklist_main(checklist_id):
         cursor = db_connection.cursor()
         delete = (
             "DELETE FROM checklists "
@@ -506,6 +513,3 @@ db_connection = psycopg2.connect(**db_settings)
 # delete_activities_from_checklist(get_activities_from_checklist(checklist_id_test_1),  checklist_id_test_1)
 # print('2424')
 
-
-
-create_main_checklist(20)
