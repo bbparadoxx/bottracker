@@ -53,6 +53,26 @@ def gen_activity_measure_markup(activity_name):
     return markup
 
 
+#основной экран. разметка 2. редактировать чеклист
+#переименовать/удалить чеклист/вернуться
+def gen_checklist_settings_markup(checklist_id):
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 3
+    markup.add(InlineKeyboardButton('Переименовать чеклист', callback_data=f'rename_checklist_{checklist_id}'))
+    markup.add(InlineKeyboardButton('Удалить чеклист', callback_data=f'delete_checklist_{checklist_id}'))
+    markup.add(InlineKeyboardButton('<- (вернуться)', callback_data=f'come_back_{checklist_id}'))
+    return markup
+
+
+#основной экран. разметка 3.
+#вы уверены, что хотите удалить чеклист? активности останутся в других чеклистах
+def gen_confirm_deleting_checklist_markup(checklist_id):
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(InlineKeyboardButton("Да", callback_data=f"delete_checklist_{checklist_id}"))
+    markup.add(InlineKeyboardButton("Нет", callback_data=f"come_back_{checklist_id}"))
+    return markup
+
 dict_UTC = (
     ('-01:00', '(UTC-01:00) Cape Verde'),
     ('+00:00', '(UTC+00:00) Dublin, Edinburgh, Lisbon, London'),

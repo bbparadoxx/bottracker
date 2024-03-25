@@ -22,12 +22,6 @@ def gen_markup(checklist_id):
     markup.add(InlineKeyboardButton('<- (вернуться)', callback_data='come back'))
     return markup
 
-вы уверены, что хотите удалить чеклист? активности останутся в других чеклистах
-#основной экран. разметка 3.
-#переименовать/удалить чеклист/вернуться
-def gen_markup(checklist_id):
-
-    return markup
 
 переименовать/ удалить активность/вернуться?
 #основной экран. разметка 2. редактировать чеклист

@@ -212,6 +212,7 @@ def get_activities(user_id) -> list:
     # return names
     return lt
 
+
 #отдаёт id активности по имени!
 def get_activity_id(user_id, activity_name) -> int:
     cursor = db_connection.cursor()
@@ -232,7 +233,26 @@ def get_checklist_id(user_id, checklist_name) -> int:
     return checklist_id
 
 
-#отдаёт имя чеклиста
+#отдаёт имя активности по id
+def get_activity_name(activity_id):
+    cursor = db_connection.cursor()
+    select = f"SELECT name FROM activities WHERE id = {activity_id}"
+    cursor.execute(select)
+    activity_name = cursor.fetchone()[0]
+    cursor.close()
+    return activity_name
+
+
+#отдаёт имя чеклиста по id
+def get_checklist_name(checklist_id):
+    cursor = db_connection.cursor()
+    select = f"SELECT name FROM activities WHERE id = {checklist_id}"
+    cursor.execute(select)
+    checklist_name = cursor.fetchone()[0]
+    cursor.close()
+    return checklist_name
+
+
 def is_checklist_main(checklist_id):
     cursor = db_connection.cursor()
     select = f"SELECT is_main FROM checklists WHERE id = {checklist_id}"
@@ -279,6 +299,20 @@ def get_activities_from_checklist(checklist_id):
     cursor.close()
     return names
 
+#отдает активности в чеклисте!
+def get_activities_ids_from_checklist(checklist_id):
+    cursor = db_connection.cursor()
+    select = (
+        "SELECT id FROM activities_checklists as a_c "
+        "LEFT JOIN activities as a "
+        "on a_c.act_id = a.id " 
+        f"WHERE checklist_id = {checklist_id}"
+    )
+    cursor.execute(select)
+    lt = cursor.fetchall()
+    ids = [item for t in lt for item in t]
+    cursor.close()
+    return ids
 
 #отдает чеклисты пользователя!
 def get_checklists(user_id):
